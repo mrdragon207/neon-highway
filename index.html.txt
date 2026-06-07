@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Highway — Telegram Edition</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: #050611; font-family: 'Segoe UI', sans-serif; color: #fff;
+            width: 100vw; height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+        }
+        .header-panel {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 20px; background: rgba(10, 11, 28, 0.9); border-bottom: 2px solid #ff007f; z-index: 8;
+        }
+        h1 { color: #ff007f; text-shadow: 0 0 15px #ff007f; font-size: 18px; letter-spacing: 1px; }
+        .stats-container { display: flex; gap: 15px; font-size: 14px; font-weight: bold; }
+        .p1-box { color: #00f3ff; } .p2-box { color: #ffeb3b; } .score-box { color: #ff007f; }
+
+        #gameArea { position: relative; flex: 1; width: 100%; background: #070817; overflow: hidden; }
+        .border-line { position: absolute; top: 0; width: 5px; height: 100%; background: #ff007f; box-shadow: 0 0 15px #ff007f; }
+        .border-left { left: 8%; } .border-right { right: 8%; }
+        .line { position: absolute; width: 4px; height: 80px; background: rgba(0, 243, 255, 0.2); }
+
+        /* Moshinalar va elementlar */
+        .car { position: absolute; width: 34px; height: 64px; border-radius: 6px; z-index: 5; }
+        .player1-car { background: #00f3ff; border: 2px solid #fff; box-shadow: 0 0 15px #00f3ff; }
+        .player2-car { background: #ffeb3b; border: 2px solid #fff; box-shadow: 0 0 15px #ffeb3b; }
+        .enemy-car { position: absolute; width: 34px; height: 64px; border-radius: 6px; z-index: 4; }
+        .coin { position: absolute; width: 18px; height: 18px; background: #ffd700; border-radius: 50%; box-shadow: 0 0 10px #ffd700; z-index: 3; }
+        
+        /* Modallar / Ekranlar */
+        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; background: rgba(5, 6, 17, 0.98); padding: 20px; overflow-y: auto; }
+        .btn { padding: 12px 30px; font-size: 14px; font-weight: bold; background: #00f3ff; border: none; border-radius: 25px; cursor: pointer; color: #111; box-shadow: 0 0 10px #00f3ff; margin-top: 10px; width: 260px; text-align: center; text-transform: uppercase; }
+        .btn-store { background: #ff007f; box-shadow: 0 0 10px #ff007f; color: #fff; }
+        .btn-secondary { background: #34495e; color: #fff; box-shadow: none; }
+
+        /* Leaderboard Stili */
+        .leaderboard { width: 100%; max-width: 320px; background: rgba(255,255,255,0.03); border: 1px solid #222; border-radius: 12px; padding: 10px; margin: 15px 0; }
+        .podium-item { display: flex; justify-content: space-between; padding: 6px 10px; margin-bottom: 5px; border-radius: 6px; font-weight: bold; }
+        .rank-1 { background: linear-gradient(90deg, #d4af37, transparent); color: #fff; border: 1px solid #d4af37; }
+        .rank-2 { background: linear-gradient(90deg, #c0c0c0, transparent); color: #fff; border: 1px solid #c0c0c0; }
+        .rank-3 { background: linear-gradient(90deg, #cd7f32, transparent); color: #fff; border: 1px solid #cd7f32; }
+        .top-item { display: flex; justify-content: space-between; padding: 4px 10px; font-size: 13px; color: #ccc; border-bottom: 1px solid #111; }
+
+        #countdownOverlay { position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); display:none; align-items:center; justify-content:center; font-size:80px; font-weight:900; color:#00f3ff; z-index:9; }
+    </style>
+</head>
+<body>
+
+    <div class="header-panel">
+        <h1 id="userTitle">NEON HIGHWAY</h1>
+        <div class="stats-container">
+            <div class="p1-box">P1: ⭐<span id="p1Coins">0</span></div>
+            <div id="p2Stats" class="p2-box" style="display:none;">P2: ⭐<span id="p2Coins">0</span></div>
+            <div class="score-box">🏁 <span id="score">0</span>m</div>
+        </div>
+    </div>
+
+    <div id="gameArea">
+        <div class="border-line border-left"></div>
+        <div class="border-line border-right"></div>
+        <div id="countdownOverlay">3</div>
+
+        <div id="mainMenu" class="overlay">
+            <h2 style="color:#00f3ff; margin-bottom:5px; text-shadow: 0 0 10px #00f3ff;">MAIN MENU</h2>
+            <p style="color:#666; font-size:12px; margin-bottom:15px;">Rejimni tanlang va rekord o'rnating</p>
+            
+            <button class="btn" onclick="prepareGame('single')">🙋‍♂️ YAKKA O'YINCHI (Single)</button>
+            <button class="btn" onclick="prepareGame('multi')">👥 2 O'YINCHI (1 ekranda)</button>
+            <button class="btn btn-store" onclick="openLeaderboard()">🏆 REKORDLAR / TOP 10</button>
+            <button class="btn btn-secondary" onclick="shareGame()">➕ DO'STLARNI TAKLIF QILISH</button>
+        </div>
+
+        <div id="leaderboardScreen" class="overlay" style="display:none;">
+            <h3 style="color:#ff007f;">🏆 GLOBAL REKORDLAR</h3>
+            <div class="leaderboard" id="leaderboardContent">Loyiha yuklanmoqda...</div>
+            <button class="btn btn-secondary" onclick="closeLeaderboard()">ORQAGA</button>
+        </div>
+
+        <div id="gameOverScreen" class="overlay" style="display:none;">
+            <h2 style="color:#ff0055; font-size:28px; margin-bottom:10px;">AVARIYA! 💥</h2>
+            <p id="finalScore" style="margin-bottom:15px; color:#aaa;"></p>
+            <button class="btn" onclick="backToMenu()">BOSH MENYUGA QAYTISH</button>
+        </div>
+    </div>
+
+    <script>
+        // Telegram WebApp yuklash
+        const tg = window.Telegram.WebApp;
+        tg.expand(); // Ekranni to'liq yoyish
+
+        const BACKEND_URL = "https://sizning-saytingiz.com"; // O'zingizning backend server manzilingizni yozasiz
+        let tgUser = tg.initDataUnsafe?.user || { id: 12345, first_name: "Mehmon" };
+        document.getElementById('userTitle').innerText = tgUser.first_name.toUpperCase();
+
+        const gameArea = document.getElementById('gameArea');
+        const countdownOverlay = document.getElementById('countdownOverlay');
+        const scoreDisplay = document.getElementById('score');
+        const p1CoinDisplay = document.getElementById('p1Coins');
+        const p2CoinDisplay = document.getElementById('p2Coins');
+        const p2Stats = document.getElementById('p2Stats');
+        
+        const mainMenu = document.getElementById('mainMenu');
+        const leaderboardScreen = document.getElementById('leaderboardScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+
+        let isPlaying = false, isCountingDown = false, gameMode = 'single';
+        let score = 0, speed = 8, collectedCoins = 0;
+        let roadWidth = 0, leftBoundary = 0, rightBoundary = 0, laneWidth = 0, lanes = [];
+        
+        const keys = {};
+        let p1Pos = { x: 0, y: 0 }, p2Pos = { x: 0, y: 0 };
+        const SENSITIVITY = 8;
+
+        let roadLines = [];
+        let enemyInterval, coinInterval;
+
+        let player1 = document.createElement('div'); player1.classList.add('car', 'player1-car'); gameArea.appendChild(player1);
+        let player2 = document.createElement('div'); player2.classList.add('car', 'player2-car');
+
+        function resizeGame() {
+            roadWidth = gameArea.clientWidth;
+            leftBoundary = roadWidth * 0.08; rightBoundary = roadWidth * 0.92;
+            laneWidth = (rightBoundary - leftBoundary) / 4;
+            lanes = [leftBoundary + laneWidth*0.5 - 17, leftBoundary + laneWidth*1.5 - 17, leftBoundary + laneWidth*2.5 - 17, leftBoundary + laneWidth*3.5 - 17];
+
+            roadLines.forEach(l => l.remove()); roadLines = [];
+            for (let lIdx = 1; lIdx < 4; lIdx++) {
+                let currentLineLeft = leftBoundary + (laneWidth * lIdx);
+                for (let i = 0; i < 8; i++) {
+                    let el = document.createElement('div'); el.classList.add('line');
+                    el.style.left = currentLineLeft + 'px'; el.style.top = (i * 140) + 'px';
+                    gameArea.appendChild(el); roadLines.push(el);
+                }
+            }
+        }
+
+        window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+
+        function shareGame() {
+            tg.shareToStory ? tg.shareToStory("https://t.me/SizningBotName?startapp=ref_" + tgUser.id) : 
+            tg.openTelegramLink("https://t.me/share/url?url=https://t.me/SizningBotName?startapp=ref_" + tgUser.id + "&text=Men bilan kiber poyga o'yna!");
+        }
+
+        function prepareGame(mode) {
+            gameMode = mode;
+            mainMenu.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            countdownOverlay.style.display = 'flex';
+            
+            if (gameMode === 'multi') {
+                p2Stats.style.display = 'block';
+                gameArea.appendChild(player2);
+            } else {
+                p2Stats.style.display = 'none';
+                player2.remove();
+            }
+
+            resizeGame();
+            isPlaying = true; isCountingDown = true; score = 0; speed = 8; collectedCoins = 0;
+            p1Pos = { x: lanes[1], y: gameArea.clientHeight - 100 };
+            p2Pos = { x: lanes[2], y: gameArea.clientHeight - 100 };
+
+            let count = 3; countdownOverlay.innerText = count;
+            let timer = setInterval(() => {
+                count--;
+                if(count > 0) countdownOverlay.innerText = count;
+                else if(count === 0) countdownOverlay.innerText = "GO!";
+                else {
+                    clearInterval(timer); countdownOverlay.style.display = 'none';
+                    isCountingDown = false; startSpawning();
+                }
+            }, 1000);
+            window.requestAnimationFrame(gameLoop);
+        }
+
+        function startSpawning() {
+            enemyInterval = setInterval(() => {
+                if(!isPlaying || isCountingDown) return;
+                let enemy = document.createElement('div'); enemy.classList.add('enemy-car');
+                enemy.style.backgroundColor = ['#ff007f', '#00ff66', '#ff5400'][Math.floor(Math.random()*3)];
+                enemy.style.left = lanes[Math.floor(Math.random() * 4)] + 'px'; enemy.style.top = '-80px';
+                gameArea.appendChild(enemy);
+            }, 1100);
+
+            coinInterval = setInterval(() => {
+                if(!isPlaying || isCountingDown) return;
+                let coin = document.createElement('div'); coin.classList.add('coin');
+                coin.style.left = (lanes[Math.floor(Math.random() * 4)] + 8) + 'px'; coin.style.top = '-40px';
+                gameArea.appendChild(coin);
+            }, 1500);
+        }
+
+        function gameLoop() {
+            if(!isPlaying) return;
+            
+            // Harakat boshqaruvi
+            if(!isCountingDown) {
+                // P1 (W,A,S,D)
+                if (keys['a'] && p1Pos.x > leftBoundary) p1Pos.x -= SENSITIVITY;
+                if (keys['d'] && p1Pos.x < rightBoundary - 36) p1Pos.x += SENSITIVITY;
+                if (keys['w'] && p1Pos.y > 10) p1Pos.y -= SENSITIVITY;
+                if (keys['s'] && p1Pos.y < gameArea.clientHeight - 80) p1Pos.y += SENSITIVITY;
+                
+                // P2 (Strelkalar)
+                if (gameMode === 'multi') {
+                    if (keys['arrowleft'] && p2Pos.x > leftBoundary) p2Pos.x -= SENSITIVITY;
+                    if (keys['arrowright'] && p2Pos.x < rightBoundary - 36) p2Pos.x += SENSITIVITY;
+                    if (keys['arrowup'] && p2Pos.y > 10) p2Pos.y -= SENSITIVITY;
+                    if (keys['arrowdown'] && p2Pos.y < gameArea.clientHeight - 80) p2Pos.y += SENSITIVITY;
+                    player2.style.left = p2Pos.x + 'px'; player2.style.top = p2Pos.y + 'px';
+                }
+
+                player1.style.left = p1Pos.x + 'px'; player1.style.top = p1Pos.y + 'px';
+
+                // Yo'l harakati
+                roadLines.forEach(l => {
+                    let t = parseInt(l.style.top) + speed;
+                    l.style.top = (t >= gameArea.clientHeight ? -80 : t) + 'px';
+                });
+
+                score++; scoreDisplay.innerText = Math.floor(score/10);
+
+                // Dushmanlar bilan to'qnashuv
+                document.querySelectorAll('.enemy-car').forEach(enemy => {
+                    let t = parseInt(enemy.style.top) + speed;
+                    if(t > gameArea.clientHeight) enemy.remove(); else enemy.style.top = t + 'px';
+
+                    if(isCollide(player1, enemy) || (gameMode === 'multi' && isCollide(player2, enemy))) endGame();
+                });
+
+                // Tangalar to'plash
+                document.querySelectorAll('.coin').forEach(coin => {
+                    let t = parseInt(coin.style.top) + speed;
+                    if(t > gameArea.clientHeight) coin.remove(); else coin.style.top = t + 'px';
+
+                    if(isCollide(player1, coin) || (gameMode === 'multi' && isCollide(player2, coin))) {
+                        collectedCoins++; p1CoinDisplay.innerText = collectedCoins; coin.remove();
+                    }
+                });
+            }
+            window.requestAnimationFrame(gameLoop);
+        }
+
+        function isCollide(a, b) {
+            let aR = a.getBoundingClientRect(); let bR = b.getBoundingClientRect();
+            return !(aR.bottom < bR.top || aR.top > bR.bottom || aR.right < bR.left || aR.left > bR.right);
+        }
+
+        function endGame() {
+            isPlaying = false; clearInterval(enemyInterval); clearInterval(coinInterval);
+            let finalPoints = Math.floor(score/10);
+            document.getElementById('finalScore').innerText = `Bosib o'tilgan masofa: ${finalPoints} m \n Topilgan tangalar: ${collectedCoins}`;
+            gameOverScreen.style.display = 'flex';
+
+            // Serverga hisobni saqlash uchun jo'natish
+            fetch(`${BACKEND_URL}/api/save-score`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    telegram_id: tgUser.id,
+                    username: tgUser.username || tgUser.first_name,
+                    score: finalPoints,
+                    coins: collectedCoins
+                })
+            }).catch(err => console.error("Saqlashda xato:", err));
+        }
+
+        function openLeaderboard() {
+            mainMenu.style.display = 'none'; leaderboardScreen.style.display = 'flex';
+            fetch(`${BACKEND_URL}/api/leaderboard`)
+                .then(res => res.json())
+                .then(data => {
+                    let html = "";
+                    data.forEach((user, idx) => {
+                        let rankClass = idx === 0 ? "rank-1 podium-item" : idx === 1 ? "rank-2 podium-item" : idx === 2 ? "rank-3 podium-item" : "top-item";
+                        let badge = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`;
+                        html += `<div class="${rankClass}"><span>${badge} ${user.username}</span> <span>${user.high_score} m</span></div>`;
+                    });
+                    document.getElementById('leaderboardContent').innerHTML = html || "Hozircha rekordlar yo'q";
+                });
+        }
+
+        function closeLeaderboard() { leaderboardScreen.style.display = 'none'; mainMenu.style.display = 'flex'; }
+        function backToMenu() { gameOverScreen.style.display = 'none'; mainMenu.style.display = 'flex'; }
+        resizeGame();
+    </script>
+</body>
+</html>
